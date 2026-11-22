@@ -12,6 +12,7 @@ DATASET = "pwc-archive/links-between-paper-and-code"
 HF_ROWS = "https://datasets-server.huggingface.co/rows"
 ARXIV_API = "https://export.arxiv.org/api/query"
 ATOM = "{http://www.w3.org/2005/Atom}"
+ARXIV = "{http://arxiv.org/schemas/atom}"
 
 
 def github_repo_key(url):
@@ -44,11 +45,19 @@ def parse_arxiv_atom(xml):
             continue
         arxiv_id = match.group(1).split("v")[0]
         authors = [a.findtext(ATOM + "name") for a in entry.findall(ATOM + "author")]
+        primary = entry.find(ARXIV + "primary_category")
+        primary_category = primary.get("term") if primary is not None else None
+        categories = sorted({node.get("term") for node in entry.findall(ATOM + "category") if node.get("term")})
+        if primary_category and primary_category not in categories:
+            categories.append(primary_category)
+            categories.sort()
         result[arxiv_id] = {
             "title": " ".join((entry.findtext(ATOM + "title") or "").split()),
             "authors": [a for a in authors if a],
             "published": entry.findtext(ATOM + "published"),
             "url": "https://arxiv.org/abs/" + arxiv_id,
+            "primary_category": primary_category,
+            "categories": categories,
         }
     return result
 
@@ -131,7 +140,9 @@ async def acquire_papers(fetcher, store, *, limit=1000, github_token="", max_pag
                             "paper_url": source["url"], "github_url": canonical_repo,
                             "github_stars": repo_data["stargazers_count"],
                             "github_stars_collected_at": iso(utcnow()),
-                            "published_date": iso(parse_date(source["published"]))},
+                            "published_date": iso(parse_date(source["published"])),
+                            "arxiv_primary_category": source.get("primary_category"),
+                            "arxiv_categories": source.get("categories")},
                 "collectedAt": iso(utcnow()),
             }
             store.upsert(entity, paper_id, {"archive": archive_row, "arxiv": source, "github": {"html_url": canonical_repo, "stargazers_count": repo_data["stargazers_count"]}})

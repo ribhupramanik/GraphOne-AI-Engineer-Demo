@@ -134,4 +134,10 @@ The export process filters jobs and news to a strict
 rolling 24-hour publication window, removes generic
 product descriptions, and generates a submission manifest.
 
-Publish these CSVs to Google Sheets with six tabs.
+Publish these CSVs to Google Sheets with six tabs.## High-precision quality review
+
+To avoid wrongly labeling ordinary sales/operations positions as AI roles, job ingestion now requires a title-indicated AI/ML role. `content.role_family` is separately classified into functional categories. Reproduce the conservative submission view with `python scripts/prepare_submission.py --strict-ai-jobs`. The manifest documents excluded jobs. This trades recall for precision and does not assert that a title keyword verifies the full job description.
+
+Research-paper GitHub validation does not, by itself, establish AI subject relevance. Run `python scripts/audit_arxiv_subjects.py` to verify the paper's official arXiv subject categories. The script writes an independent category report, never fabricates missing tags, and only creates a 1,000+-row AI-verified subset when the actual metadata meets the minimum. See `QUALITY_IMPROVEMENTS.md` for commands and limitations.
+
+The Google Sheets publisher must be pointed at `output/submission` rather than the unfiltered historical `output/csv`, e.g. `python scripts/publish_to_sheets.py --csv-dir output/submission --credentials credentials.json --public`.

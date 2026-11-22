@@ -34,7 +34,7 @@ def read_tab(name, csv_dir):
 def main():
     parser = argparse.ArgumentParser(description="Publish verified CSV outputs as six Google Sheets tabs")
     parser.add_argument("--credentials", default="credentials.json")
-    parser.add_argument("--csv-dir", default="output/csv")
+    parser.add_argument("--csv-dir", default="output/submission")
     parser.add_argument("--title", default="GraphOne AI Engineer - Verified Data Output")
     parser.add_argument("--spreadsheet-id")
     parser.add_argument("--public", action="store_true")
@@ -45,10 +45,20 @@ def main():
         spreadsheet_id = args.spreadsheet_id
         existing = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
         existing_titles = {sheet["properties"]["title"] for sheet in existing["sheets"]}
-        create_tabs = [name for name in TABS if name not in existing_titles]
-        if create_tabs:
+        requests = []
+        for name in TABS:
+            if name in existing_titles:
+                continue
+            aliases = [sheet for sheet in existing["sheets"]
+                       if sheet["properties"]["title"].replace("_", " ").casefold() == name.casefold()]
+            if len(aliases) == 1:
+                requests.append({"updateSheetProperties": {"properties": {
+                    "sheetId": aliases[0]["properties"]["sheetId"], "title": name}, "fields": "title"}})
+            else:
+                requests.append({"addSheet": {"properties": {"title": name}}})
+        if requests:
             sheets.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id,
-                body={"requests": [{"addSheet": {"properties": {"title": name}}} for name in create_tabs]}).execute()
+                body={"requests": requests}).execute()
     else:
         created = sheets.spreadsheets().create(body={"properties": {"title": args.title},
              "sheets": [{"properties": {"title": name}} for name in TABS]}).execute()

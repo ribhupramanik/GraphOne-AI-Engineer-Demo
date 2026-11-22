@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 from datetime import timedelta
 from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
@@ -9,6 +8,7 @@ from xml.etree import ElementTree as ET
 from bs4 import BeautifulSoup
 
 from .entities import Resolver
+from .job_quality import ai_title_indicated, role_family_from_title
 from .net import FetchError
 from .utils import canonical_url, fresh_within_24_hours, iso, parse_date, utcnow
 
@@ -32,12 +32,6 @@ JOB_SOURCES = {
     "Jobicy": "https://jobicy.com/api/v2/remote-jobs?count=50",
     "Himalayas": "https://himalayas.app/jobs/api?limit=100",
 }
-
-AI_JOB_PATTERN = re.compile(
-    r"\b(?:artificial intelligence|machine learning|deep learning|data scientist|"
-    r"data science|gen(?:erative)?\s*ai|llm|nlp|computer vision|ai engineer|ml engineer|"
-    r"prompt engineer|model training|mlops|ai research|ai/ml|AI|ML)\b", re.I,
-)
 
 
 def _node_text(node, name):
@@ -216,7 +210,7 @@ async def fetch_jobs(fetcher, store, *, reference=None, resolver=None):
                 continue
             title = item.get("title") or ""
             description = html_to_text(item.get("description") or "")
-            if not AI_JOB_PATTERN.search(title + " " + description[:5000]):
+            if not ai_title_indicated(title):
                 continue
             raw_name = (item.get("company") or "").strip()
             canonical, method, score = resolver.resolve(raw_name)
@@ -225,7 +219,7 @@ async def fetch_jobs(fetcher, store, *, reference=None, resolver=None):
                 "source": {"name": name, "url": page_url},
                 "content": {"company": canonical, "date": iso(parse_date(item["date"])),
                             "title": title, "is_remote": item.get("remote") if isinstance(item.get("remote"), bool) else None,
-                            "role_family": "AI / Machine Learning",
+                            "role_family": role_family_from_title(title),
                             "fullText": description or None},
                 "collectedAt": iso(reference),
             }

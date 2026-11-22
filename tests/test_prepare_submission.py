@@ -90,3 +90,41 @@ def test_strict_inclusive_freshness_boundary(tmp_path):
     target = tmp_path / "submission"
     prepare_submission(source, target, as_of=datetime(2026, 11, 22, 12, tzinfo=timezone.utc))
     assert len(_read(target, "jobs.csv")) == 2
+
+
+def test_strict_ai_jobs_filters_generic_roles_and_recategorizes(tmp_path):
+    source = _fixture(tmp_path)
+    HEADERS["jobs.csv"] = ["source.url", "content.date", "content.title", "content.role_family"]
+    try:
+        _write(source, "jobs.csv", [
+            {"source.url": "https://example.com/j1", "content.date": "2026-11-22T11:00:00Z", "content.title": "Senior Customer Success Manager", "content.role_family": "AI / Machine Learning"},
+            {"source.url": "https://example.com/j2", "content.date": "2026-11-22T11:00:00Z", "content.title": "Senior AI Engineer", "content.role_family": "AI / Machine Learning"},
+        ])
+        result = prepare_submission(source, tmp_path / "review", as_of=datetime(2026, 11, 22, 12, tzinfo=timezone.utc), strict_ai_jobs=True)
+        assert result["sheets"]["Jobs"]["submission_rows"] == 1
+        assert result["sheets"]["Jobs"]["excluded_without_explicit_ai_title_evidence"] == 1
+        output = _read(tmp_path / "review", "jobs.csv")
+        assert output[0]["content.title"] == "Senior AI Engineer"
+        assert output[0]["content.role_family"] == "Engineering"
+    finally:
+        HEADERS["jobs.csv"] = ["source.url", "content.date"]
+
+
+def test_strict_ai_jobs_refuses_ambiguous_schema(tmp_path):
+    source = _fixture(tmp_path)
+    import pytest
+    with pytest.raises(ValueError, match="content.title"):
+        prepare_submission(source, tmp_path / "review", as_of=datetime(2026, 11, 22, 12, tzinfo=timezone.utc), strict_ai_jobs=True)
+
+
+def test_verified_ai_papers_must_have_thousand_entries(tmp_path):
+    import pytest
+    source = _fixture(tmp_path)
+    reviewed = tmp_path / "verified.csv"
+    with reviewed.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=HEADERS["research_papers.csv"])
+        writer.writeheader()
+        writer.writerow({"source.url": "https://example.com/one", "content.github_stars": "1"})
+    with pytest.raises(ValueError, match="fewer than 1,000"):
+        prepare_submission(source, tmp_path / "submission", verified_papers=reviewed)
+    assert not (tmp_path / "submission").exists()
