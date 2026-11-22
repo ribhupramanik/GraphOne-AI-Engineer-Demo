@@ -1,0 +1,17 @@
+cat >> .gitignore <<'EOF'
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+output/
+*.db
+*.db-wal
+*.db-shm
+*.log
+credentials.json
+.google_token.json
+.DS_Store
+EOF
