@@ -117,3 +117,21 @@ Test suite covers timestamp inclusivity, UTC handling, URL deduplication, paper/
 ## Readiness gate
 
 `python -m src.cli validate` exits with status 2 and writes `output/validation_report.json` until the 1,000-row minima are met, all configured sources were successfully checked, and every exported news/job remains within the last 24 hours **at submission time**. The pipeline will not declare itself complete when input sources are inaccessible.
+
+## Final Submission Export
+
+The pipeline preserves historical records in SQLite.
+
+To generate the six cleaned submission CSVs:
+
+python -m src.cli signals --enrich-llm --llm-limit 10
+python -m src.cli export
+python scripts/prepare_submission.py
+
+The files are written to output/submission/.
+
+The export process filters jobs and news to a strict
+rolling 24-hour publication window, removes generic
+product descriptions, and generates a submission manifest.
+
+Publish these CSVs to Google Sheets with six tabs.
